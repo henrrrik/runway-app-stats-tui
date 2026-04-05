@@ -1,5 +1,7 @@
 # runway-stats
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/henrrrik/runway-stats-tui)](https://goreportcard.com/report/github.com/henrrrik/runway-stats-tui)
+
 A terminal dashboard for monitoring [Runway](https://www.runway.horse) app resources. Displays CPU, RAM, Network I/O, and Disk usage with sparkline charts.
 
 Built with [Bubbletea](https://github.com/charmbracelet/bubbletea) and [Lipgloss](https://github.com/charmbracelet/lipgloss).
