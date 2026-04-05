@@ -17,7 +17,7 @@ type StatsData struct {
 }
 
 type rawEntry struct {
-	Ts  int64 `json:"ts"`
+	Ts  int64  `json:"ts"`
 	Val rawVal `json:"val"`
 }
 
