@@ -4,6 +4,8 @@ A terminal dashboard for monitoring [Runway](https://www.runway.horse) app resou
 
 Built with [Bubbletea](https://github.com/charmbracelet/bubbletea) and [Lipgloss](https://github.com/charmbracelet/lipgloss).
 
+<img width="782" height="452" alt="runway-stats" src="https://github.com/user-attachments/assets/fbf49e42-c983-4b8e-aabd-1ac18d5b3f6f" />
+
 ## Prerequisites
 
 - Go 1.21+
