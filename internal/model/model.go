@@ -66,37 +66,58 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
-		}
+		return m.handleKeyMsg(msg)
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 	case statsMsg:
-		for i := range m.apps {
-			if m.apps[i].name == msg.app {
-				m.apps[i].stats = msg.data
-				m.apps[i].err = nil
-				break
-			}
-		}
+		return m.handleStatsMsg(msg)
 	case errMsg:
-		for i := range m.apps {
-			if m.apps[i].name == msg.app {
-				m.apps[i].err = msg.err
-				break
-			}
-		}
-		return m, tickCmd(m.interval)
+		return m.handleErrMsg(msg)
 	case tickMsg:
-		cmds := make([]tea.Cmd, len(m.apps))
-		for i, a := range m.apps {
-			cmds[i] = fetchCmd(a.name, a.fetcher)
-		}
-		return m, tea.Batch(cmds...)
+		return m.handleTickMsg()
 	}
 	return m, nil
+}
+
+func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func (m Model) handleStatsMsg(msg statsMsg) (tea.Model, tea.Cmd) {
+	if a := m.findApp(msg.app); a != nil {
+		a.stats = msg.data
+		a.err = nil
+	}
+	return m, nil
+}
+
+func (m Model) handleErrMsg(msg errMsg) (tea.Model, tea.Cmd) {
+	if a := m.findApp(msg.app); a != nil {
+		a.err = msg.err
+	}
+	return m, tickCmd(m.interval)
+}
+
+func (m Model) handleTickMsg() (tea.Model, tea.Cmd) {
+	cmds := make([]tea.Cmd, len(m.apps))
+	for i, a := range m.apps {
+		cmds[i] = fetchCmd(a.name, a.fetcher)
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) findApp(name string) *appState {
+	for i := range m.apps {
+		if m.apps[i].name == name {
+			return &m.apps[i]
+		}
+	}
+	return nil
 }
 
 func (m Model) View() string {
