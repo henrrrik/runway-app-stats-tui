@@ -116,12 +116,12 @@ func (m Model) View() string {
 	valueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
 	errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 
-	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
 	var sections []string
 
 	for i, a := range m.apps {
 		if i > 0 {
-			sections = append(sections, dividerStyle.Render(strings.Repeat("─", m.width)))
+			sections = append(sections, dividerStyle.Render(strings.Repeat("━", m.width)))
 		}
 		header := appNameStyle.Render(a.name)
 
