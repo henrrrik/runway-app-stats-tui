@@ -11,7 +11,7 @@ Built with [Bubbletea](https://github.com/charmbracelet/bubbletea) and [Lipgloss
 ## Prerequisites
 
 - Go 1.21+
-- [Runway CLI](https://www.runway.horse/docs/cli/install/) installed and logged in
+- [Runway CLI](https://www.runway.horse/docs/cli/install/) v1.49.0 or newer, installed and logged in
 
 ## Install
 
@@ -44,5 +44,7 @@ runway-stats --interval=6h --refresh=30s my-app
 |------|---------|-------------|
 | `--interval` | `1h` | Stats time range (e.g. `1h`, `6h`, `24h`) |
 | `--refresh` | `60s` | How often to re-fetch data |
+
+A panel turns yellow when its latest value is above the warning threshold Runway reports for your plan, and red above the critical threshold.
 
 Press `q` or `Ctrl+C` to quit.

@@ -9,7 +9,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/dustin/go-humanize"
+)
+
+const (
+	borderColor   = lipgloss.Color("8")
+	valueColor    = lipgloss.Color("15")
+	warnColor     = lipgloss.Color("3")
+	criticalColor = lipgloss.Color("1")
 )
 
 type statsMsg struct {
@@ -33,6 +39,7 @@ type appState struct {
 	name    string
 	fetcher stats.Fetcher
 	stats   stats.StatsData
+	loaded  bool
 	err     error
 }
 
@@ -91,6 +98,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleStatsMsg(msg statsMsg) (tea.Model, tea.Cmd) {
 	if a := m.findApp(msg.app); a != nil {
 		a.stats = msg.data
+		a.loaded = true
 		a.err = nil
 	}
 	return m, nil
@@ -131,10 +139,10 @@ func (m Model) View() string {
 	sparkWidth := panelWidth - 4
 	panelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("8")).
+		BorderForeground(borderColor).
 		Width(panelWidth).
 		Padding(0, 1)
-	valueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+	valueStyle := lipgloss.NewStyle().Foreground(valueColor)
 	errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 
 	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
@@ -146,7 +154,7 @@ func (m Model) View() string {
 		}
 		header := appNameStyle.Render(a.name)
 
-		if a.err != nil && len(a.stats.TimeSeries) == 0 {
+		if a.err != nil && !a.loaded {
 			sections = append(sections, lipgloss.JoinVertical(lipgloss.Left,
 				header,
 				errStyle.Render(fmt.Sprintf("Error: %s", a.err.Error())),
@@ -179,40 +187,37 @@ func renderAppDashboard(a appState, panelStyle, titleStyle, valueStyle lipgloss.
 	ramColor := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	netColor := lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	diskColor := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	s := a.stats
 
-	cpuValues := extractValues(a.stats.TimeSeries, func(p stats.MetricPoint) float64 { return p.CPULoad })
-	ramValues := extractValues(a.stats.TimeSeries, func(p stats.MetricPoint) float64 { return float64(p.RAMUsed) })
-	rxValues := extractValues(a.stats.TimeSeries, func(p stats.MetricPoint) float64 { return p.NetRx })
-	txValues := extractValues(a.stats.TimeSeries, func(p stats.MetricPoint) float64 { return p.NetTx })
-	diskValues := extractValues(a.stats.TimeSeries, func(p stats.MetricPoint) float64 { return float64(p.DiskUsed) })
+	cpu := renderPanel(panelStyle, titleStyle, valueStyle, metricLevel(s.CPU),
+		"CPU", cpuColor.Render(sparkline.Render(s.CPU.Values(), sparkWidth)),
+		formatCPU(s.CPU))
 
-	cpu := renderPanel(panelStyle, titleStyle, valueStyle,
-		"CPU", cpuColor.Render(sparkline.Render(cpuValues, sparkWidth)),
-		fmt.Sprintf("%.4f%%", a.stats.Latest.CPULoad*100))
+	ram := renderPanel(panelStyle, titleStyle, valueStyle, metricLevel(s.RAM),
+		"RAM", ramColor.Render(sparkline.Render(s.RAM.Values(), sparkWidth)),
+		formatUsage(s.RAM))
 
-	ram := renderPanel(panelStyle, titleStyle, valueStyle,
-		"RAM", ramColor.Render(sparkline.Render(ramValues, sparkWidth)),
-		humanize.IBytes(uint64(a.stats.Latest.RAMUsed)))
-
-	net := renderPanel(panelStyle, titleStyle, valueStyle,
+	net := renderPanel(panelStyle, titleStyle, valueStyle, maxLevel(metricLevel(s.NetIn), metricLevel(s.NetOut)),
 		"Network",
-		fmt.Sprintf("rx %s\ntx %s",
-			netColor.Render(sparkline.Render(rxValues, sparkWidth-3)),
-			netColor.Render(sparkline.Render(txValues, sparkWidth-3))),
-		fmt.Sprintf("rx %s/s  tx %s/s",
-			humanize.IBytes(uint64(a.stats.Latest.NetRx)),
-			humanize.IBytes(uint64(a.stats.Latest.NetTx))))
+		fmt.Sprintf("in  %s\nout %s",
+			netColor.Render(sparkline.Render(s.NetIn.Values(), sparkWidth-4)),
+			netColor.Render(sparkline.Render(s.NetOut.Values(), sparkWidth-4))),
+		fmt.Sprintf("in %s  out %s", formatRate(s.NetIn), formatRate(s.NetOut)))
 
-	disk := renderPanel(panelStyle, titleStyle, valueStyle,
-		"Disk", "\n"+diskColor.Render(sparkline.Render(diskValues, sparkWidth)),
-		humanize.IBytes(uint64(a.stats.Latest.DiskUsed)))
+	disk := renderPanel(panelStyle, titleStyle, valueStyle, metricLevel(s.Disk),
+		"Disk", "\n"+diskColor.Render(sparkline.Render(s.Disk.Values(), sparkWidth)),
+		formatUsage(s.Disk))
 
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, cpu, " ", ram)
 	bottomRow := lipgloss.JoinHorizontal(lipgloss.Top, net, " ", disk)
 	return lipgloss.JoinVertical(lipgloss.Left, topRow, bottomRow)
 }
 
-func renderPanel(panelStyle, titleStyle, valueStyle lipgloss.Style, title, chart, value string) string {
+// renderPanel draws a metric panel. Warning and critical levels recolour the
+// border and the value text.
+func renderPanel(panelStyle, titleStyle, valueStyle lipgloss.Style, level stats.Level, title, chart, value string) string {
+	panelStyle = panelStyle.BorderForeground(levelColor(level, borderColor))
+	valueStyle = valueStyle.Foreground(levelColor(level, valueColor))
 	return panelStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left,
 			titleStyle.Render(title),
@@ -222,12 +227,64 @@ func renderPanel(panelStyle, titleStyle, valueStyle lipgloss.Style, title, chart
 	)
 }
 
-func extractValues(points []stats.MetricPoint, fn func(stats.MetricPoint) float64) []float64 {
-	values := make([]float64, len(points))
-	for i, p := range points {
-		values[i] = fn(p)
+const noData = "no data"
+
+// formatCPU shows CPU usage as a share of the plan's core limit.
+func formatCPU(m stats.Metric) string {
+	v, ok := m.Latest()
+	if !ok {
+		return noData
 	}
-	return values
+	if m.Max <= 0 {
+		return fmt.Sprintf("%.3g %s", v, m.Unit)
+	}
+	return fmt.Sprintf("%.2f%% of %g %s", v/m.Max*100, m.Max, m.Unit)
+}
+
+// formatUsage shows the latest value against the plan limit, e.g. "13.5 / 128 MiB".
+func formatUsage(m stats.Metric) string {
+	v, ok := m.Latest()
+	if !ok {
+		return noData
+	}
+	return fmt.Sprintf("%.1f / %g %s", v, m.Max, m.Unit)
+}
+
+// formatRate shows the latest value with its unit, e.g. "0.0045 MBit/s".
+func formatRate(m stats.Metric) string {
+	v, ok := m.Latest()
+	if !ok {
+		return noData
+	}
+	return fmt.Sprintf("%.3g %s", v, m.Unit)
+}
+
+func metricLevel(m stats.Metric) stats.Level {
+	v, ok := m.Latest()
+	if !ok {
+		return stats.LevelOK
+	}
+	return m.Level(v)
+}
+
+func maxLevel(levels ...stats.Level) stats.Level {
+	worst := stats.LevelOK
+	for _, l := range levels {
+		if l > worst {
+			worst = l
+		}
+	}
+	return worst
+}
+
+func levelColor(l stats.Level, normal lipgloss.Color) lipgloss.Color {
+	switch l {
+	case stats.LevelCritical:
+		return criticalColor
+	case stats.LevelWarn:
+		return warnColor
+	}
+	return normal
 }
 
 func fetchCmd(app string, fetcher stats.Fetcher) tea.Cmd {

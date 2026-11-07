@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type stubFetcher struct {
@@ -19,13 +20,21 @@ func (s stubFetcher) Fetch() (stats.StatsData, error) {
 	return s.data, s.err
 }
 
+func metric(unit string, max, warn, crit float64, values ...float64) stats.Metric {
+	m := stats.Metric{Unit: unit, Max: max, WarnAbove: warn, CriticalAbove: crit}
+	for i, v := range values {
+		m.Data = append(m.Data, stats.Point{Timestamp: int64(i) * 60000, Value: v})
+	}
+	return m
+}
+
 func sampleData() stats.StatsData {
 	return stats.StatsData{
-		TimeSeries: []stats.MetricPoint{
-			{Timestamp: 1000, CPULoad: 0.01, RAMUsed: 1024000, DiskUsed: 0, NetRx: 100, NetTx: 50},
-			{Timestamp: 1060, CPULoad: 0.02, RAMUsed: 2048000, DiskUsed: 512, NetRx: 200, NetTx: 100},
-		},
-		Latest: stats.MetricPoint{CPULoad: 0.02, RAMUsed: 2048000, DiskUsed: 512, NetRx: 200, NetTx: 100},
+		CPU:    metric("cores", 0.5, 0.325, 0.4, 0.01, 0.02),
+		RAM:    metric("MiB", 128, 83.2, 102.4, 12.5, 13.5),
+		Disk:   metric("MiB", 2048, 1331.2, 1638.4, 19.1, 19.2),
+		NetIn:  metric("MBit/s", 5, 3.25, 4, 0.0045),
+		NetOut: metric("MBit/s", 5, 3.25, 4, 0.0024),
 	}
 }
 
@@ -46,8 +55,11 @@ func TestUpdate_StatsMsg(t *testing.T) {
 	updated, _ := m.Update(statsMsg{app: "myapp", data: data})
 	model := updated.(Model)
 
-	if len(model.apps[0].stats.TimeSeries) != 2 {
-		t.Errorf("expected 2 data points, got %d", len(model.apps[0].stats.TimeSeries))
+	if len(model.apps[0].stats.RAM.Data) != 2 {
+		t.Errorf("expected 2 RAM data points, got %d", len(model.apps[0].stats.RAM.Data))
+	}
+	if !model.apps[0].loaded {
+		t.Error("expected app to be marked as loaded")
 	}
 	if model.apps[0].err != nil {
 		t.Errorf("expected no error, got %v", model.apps[0].err)
@@ -167,5 +179,90 @@ func TestView_ShowsError(t *testing.T) {
 	view := m.View()
 	if !strings.Contains(view, "connection failed") {
 		t.Error("view should show the error message")
+	}
+}
+
+func TestView_ShowsValuesWithUnits(t *testing.T) {
+	m := newSingleApp("myapp", stubFetcher{}, 60*time.Second)
+	m.apps[0].stats = sampleData()
+	m.apps[0].loaded = true
+	m.width = 120
+	m.height = 24
+
+	view := m.View()
+	for _, want := range []string{"4.00% of 0.5 cores", "13.5 / 128 MiB", "19.2 / 2048 MiB", "0.0045 MBit/s", "0.0024 MBit/s"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("view should contain %q\n%s", want, view)
+		}
+	}
+}
+
+func TestView_KeepsDashboardOnErrorAfterLoad(t *testing.T) {
+	m := newSingleApp("myapp", stubFetcher{}, 60*time.Second)
+	m.apps[0].stats = sampleData()
+	m.apps[0].loaded = true
+	m.apps[0].err = errors.New("timeout")
+	m.width = 120
+	m.height = 24
+
+	view := m.View()
+	if !strings.Contains(view, "Warning: timeout") {
+		t.Error("view should show the error as a warning")
+	}
+	if !strings.Contains(view, "13.5 / 128 MiB") {
+		t.Error("view should keep showing the last stats")
+	}
+}
+
+func TestFormat_NoData(t *testing.T) {
+	empty := stats.Metric{Unit: "MiB", Max: 128}
+	if got := formatUsage(empty); got != "no data" {
+		t.Errorf("formatUsage on empty metric = %q, want %q", got, "no data")
+	}
+	if got := formatCPU(empty); got != "no data" {
+		t.Errorf("formatCPU on empty metric = %q, want %q", got, "no data")
+	}
+	if got := formatRate(empty); got != "no data" {
+		t.Errorf("formatRate on empty metric = %q, want %q", got, "no data")
+	}
+}
+
+func TestMetricLevel(t *testing.T) {
+	cases := []struct {
+		name string
+		m    stats.Metric
+		want stats.Level
+	}{
+		{"ok", metric("MiB", 128, 83.2, 102.4, 90, 50), stats.LevelOK},
+		{"warn", metric("MiB", 128, 83.2, 102.4, 50, 90), stats.LevelWarn},
+		{"critical", metric("MiB", 128, 83.2, 102.4, 50, 110), stats.LevelCritical},
+		{"empty", stats.Metric{WarnAbove: 1}, stats.LevelOK},
+	}
+	for _, c := range cases {
+		if got := metricLevel(c.m); got != c.want {
+			t.Errorf("%s: metricLevel = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestMaxLevel(t *testing.T) {
+	if got := maxLevel(stats.LevelOK, stats.LevelCritical, stats.LevelWarn); got != stats.LevelCritical {
+		t.Errorf("maxLevel = %v, want critical", got)
+	}
+	if got := maxLevel(); got != stats.LevelOK {
+		t.Errorf("maxLevel() = %v, want ok", got)
+	}
+}
+
+func TestLevelColor(t *testing.T) {
+	normal := lipgloss.Color("15")
+	if got := levelColor(stats.LevelOK, normal); got != normal {
+		t.Errorf("ok: got %v, want %v", got, normal)
+	}
+	if got := levelColor(stats.LevelWarn, normal); got != warnColor {
+		t.Errorf("warn: got %v, want %v", got, warnColor)
+	}
+	if got := levelColor(stats.LevelCritical, normal); got != criticalColor {
+		t.Errorf("critical: got %v, want %v", got, criticalColor)
 	}
 }
