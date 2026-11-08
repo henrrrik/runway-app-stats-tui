@@ -9,8 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 var (
@@ -23,6 +25,11 @@ var (
 	diskColor     = lipgloss.Color("6")
 	netInColor    = lipgloss.Color("3")
 	netOutColor   = lipgloss.Color("5")
+
+	appNameStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("5"))
+	titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
+	errStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	footerStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 )
 
 type statsMsg struct {
@@ -55,6 +62,8 @@ type Model struct {
 	width    int
 	height   int
 	interval time.Duration
+	// viewport scrolls the dashboard when it is taller than the terminal.
+	viewport viewport.Model
 }
 
 func New(configs []AppConfig, interval time.Duration) Model {
@@ -65,6 +74,7 @@ func New(configs []AppConfig, interval time.Duration) Model {
 	return Model{
 		apps:     apps,
 		interval: interval,
+		viewport: viewport.New(),
 	}
 }
 
@@ -78,9 +88,30 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.viewport = m.syncedViewport()
+	m, cmd := m.update(msg)
+	m.viewport = m.syncedViewport()
+	return m, cmd
+}
+
+// syncedViewport returns the viewport sized to the terminal (minus the
+// footer) and holding the current dashboard, keeping the scroll position.
+func (m Model) syncedViewport() viewport.Model {
+	vp := m.viewport
+	vp.SetWidth(m.width)
+	vp.SetHeight(max(m.height-footerRows, 0))
+	vp.SetContent(m.body())
+	return vp
+}
+
+func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		return m.handleKeyMsg(msg)
+	case tea.MouseWheelMsg:
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -94,15 +125,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
+	case "home", "g":
+		m.viewport.GotoTop()
+		return m, nil
+	case "end", "G":
+		m.viewport.GotoBottom()
+		return m, nil
 	}
-	return m, nil
+	var cmd tea.Cmd
+	m.viewport, cmd = m.viewport.Update(msg)
+	return m, cmd
 }
 
-func (m Model) handleStatsMsg(msg statsMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleStatsMsg(msg statsMsg) (Model, tea.Cmd) {
 	if a := m.findApp(msg.app); a != nil {
 		a.stats = msg.data
 		a.loaded = true
@@ -111,14 +150,14 @@ func (m Model) handleStatsMsg(msg statsMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleErrMsg(msg errMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleErrMsg(msg errMsg) (Model, tea.Cmd) {
 	if a := m.findApp(msg.app); a != nil {
 		a.err = msg.err
 	}
 	return m, tickCmd(m.interval)
 }
 
-func (m Model) handleTickMsg() (tea.Model, tea.Cmd) {
+func (m Model) handleTickMsg() (Model, tea.Cmd) {
 	cmds := make([]tea.Cmd, len(m.apps))
 	for i, a := range m.apps {
 		cmds[i] = fetchCmd(a.name, a.fetcher)
@@ -135,19 +174,44 @@ func (m *Model) findApp(name string) *appState {
 	return nil
 }
 
+const footerRows = 1
+
 func (m Model) View() tea.View {
-	v := tea.NewView(m.render())
+	v := tea.NewView("Loading...")
 	v.AltScreen = true
+	if m.width == 0 {
+		return v
+	}
+	vp := m.syncedViewport()
+	scrollable := vp.TotalLineCount() > vp.Height()
+	v.SetContent(lipgloss.JoinVertical(lipgloss.Left, vp.View(), footer(m.width, vp, scrollable)))
+	if scrollable {
+		v.MouseMode = tea.MouseModeCellMotion
+	}
 	return v
 }
 
-func (m Model) render() string {
-	if m.width == 0 {
-		return "Loading..."
+func footer(width int, vp viewport.Model, scrollable bool) string {
+	text := "Press q to quit"
+	if scrollable {
+		text += fmt.Sprintf(" · ↑/↓ to scroll (%.0f%%)", vp.ScrollPercent()*100)
 	}
+	return footerStyle.Render(ansi.Truncate(text, width, "…"))
+}
 
-	appNameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("5"))
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
+// body renders every app: as chart panels when the terminal has room for
+// them, otherwise as compact rows of values.
+func (m Model) body() string {
+	if m.width == 0 {
+		return ""
+	}
+	if !chartsFit(m.height, len(m.apps)) {
+		return m.renderCompact()
+	}
+	return m.renderCharts()
+}
+
+func (m Model) renderCharts() string {
 	// In Lip Gloss v2 Width() includes border and padding; two panels plus a
 	// 1-column gap must fit. The chart gets what's left inside both.
 	panelWidth := (m.width - 1) / 2
@@ -159,7 +223,6 @@ func (m Model) render() string {
 		Width(panelWidth).
 		Padding(0, 1)
 	valueStyle := lipgloss.NewStyle().Foreground(valueColor)
-	errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 
 	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
 	var sections []string
@@ -168,34 +231,104 @@ func (m Model) render() string {
 		if i > 0 {
 			sections = append(sections, dividerStyle.Render(strings.Repeat("━", m.width)))
 		}
-		header := appNameStyle.Render(a.name)
-
 		if a.err != nil && !a.loaded {
-			sections = append(sections, lipgloss.JoinVertical(lipgloss.Left,
-				header,
-				errStyle.Render(fmt.Sprintf("Error: %s", a.err.Error())),
-			))
+			sections = append(sections, appNameStyle.Render(a.name), errorLine(a.err))
 			continue
 		}
-
-		dashboard := renderAppDashboard(a, panelStyle, titleStyle, valueStyle, chartWidth, chartH)
-
-		var status string
-		if a.err != nil {
-			status = errStyle.Render(fmt.Sprintf("Warning: %s", a.err.Error()))
-		}
-
-		parts := []string{header, dashboard}
-		if status != "" {
-			parts = append(parts, status)
-		}
-		sections = append(sections, lipgloss.JoinVertical(lipgloss.Left, parts...))
+		sections = append(sections, appHeader(a),
+			renderAppDashboard(a, panelStyle, titleStyle, valueStyle, chartWidth, chartH))
 	}
-
-	footer := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("Press q to quit")
-	sections = append(sections, footer)
-
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+// renderCompact shows each app as its name and a line or two of values, for
+// terminals too short for charts.
+func (m Model) renderCompact() string {
+	items := make([][]string, len(m.apps))
+	for i, a := range m.apps {
+		items[i] = compactItems(a.stats)
+	}
+	alignColumns(items)
+
+	var lines []string
+	for i, a := range m.apps {
+		if a.err != nil && !a.loaded {
+			lines = append(lines, appNameStyle.Render(a.name), errorLine(a.err))
+			continue
+		}
+		lines = append(lines, appHeader(a), pack(items[i], m.width, "   "))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func compactItems(s stats.StatsData) []string {
+	item := func(label string, level stats.Level, value string) string {
+		valueStyle := lipgloss.NewStyle().Foreground(levelColor(level, valueColor))
+		return titleStyle.Render(label) + " " + valueStyle.Render(value)
+	}
+	return []string{
+		item("CPU", metricLevel(s.CPU), formatCPU(s.CPU)),
+		item("RAM", metricLevel(s.RAM), formatUsage(s.RAM)),
+		item("Net", maxLevel(metricLevel(s.NetIn), metricLevel(s.NetOut)),
+			fmt.Sprintf("in %s  out %s", formatRate(s.NetIn), formatRate(s.NetOut))),
+		item("Disk", metricLevel(s.Disk), formatUsage(s.Disk)),
+	}
+}
+
+// alignColumns pads each column to its widest cell, so rows line up and
+// wrap at the same places.
+func alignColumns(rows [][]string) {
+	var widths []int
+	for _, row := range rows {
+		for c, cell := range row {
+			if c == len(widths) {
+				widths = append(widths, 0)
+			}
+			widths[c] = max(widths[c], lipgloss.Width(cell))
+		}
+	}
+	for _, row := range rows {
+		for c, cell := range row {
+			row[c] = cell + strings.Repeat(" ", widths[c]-lipgloss.Width(cell))
+		}
+	}
+}
+
+// pack joins items with sep, starting a new line whenever the next item
+// would make the line wider than width.
+func pack(items []string, width int, sep string) string {
+	var lines []string
+	line := ""
+	for _, it := range items {
+		switch {
+		case line == "":
+			line = it
+		case lipgloss.Width(line+sep+it) <= width:
+			line += sep + it
+		default:
+			lines = append(lines, line)
+			line = it
+		}
+	}
+	lines = append(lines, line)
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], " ")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func errorLine(err error) string {
+	return errStyle.Render(fmt.Sprintf("Error: %s", err.Error()))
+}
+
+// appHeader is the app name, followed by a warning when the latest refresh
+// failed and the last good stats are still on screen.
+func appHeader(a appState) string {
+	header := appNameStyle.Render(a.name)
+	if a.err != nil {
+		header += "  " + errStyle.Render(fmt.Sprintf("Warning: %s", a.err.Error()))
+	}
+	return header
 }
 
 func renderAppDashboard(a appState, panelStyle, titleStyle, valueStyle lipgloss.Style, w, h int) string {
@@ -240,11 +373,21 @@ const (
 // chartHeight splits the terminal height between the apps, leaving room for
 // panel chrome, the divider between apps and the footer.
 func chartHeight(termHeight, apps int) int {
+	return min(max(fittingChartHeight(termHeight, apps), minChartHeight), maxChartHeight)
+}
+
+// chartsFit reports whether every app's charts get at least minChartHeight
+// rows; otherwise the dashboard falls back to compact rows.
+func chartsFit(termHeight, apps int) bool {
+	return fittingChartHeight(termHeight, apps) >= minChartHeight
+}
+
+func fittingChartHeight(termHeight, apps int) int {
 	if apps < 1 {
 		apps = 1
 	}
 	perApp := termHeight/apps - 1 // divider or footer
-	return min(max((perApp-appChromeRows)/2, minChartHeight), maxChartHeight)
+	return (perApp - appChromeRows) / 2
 }
 
 // renderPanel draws a metric panel. Warning and critical levels recolour the
