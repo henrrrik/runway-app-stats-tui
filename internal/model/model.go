@@ -2,10 +2,10 @@ package model
 
 import (
 	"fmt"
+	"github.com/henrrrik/runway-app-stats-tui/internal/chart"
+	"github.com/henrrrik/runway-app-stats-tui/internal/stats"
 	"image/color"
 	"math"
-	"runway-app-stats/internal/chart"
-	"runway-app-stats/internal/stats"
 	"strings"
 	"time"
 

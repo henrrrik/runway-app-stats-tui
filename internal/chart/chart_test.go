@@ -8,7 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"runway-app-stats/internal/stats"
+	"github.com/henrrrik/runway-app-stats-tui/internal/stats"
 )
 
 func points(values ...float64) []stats.Point {

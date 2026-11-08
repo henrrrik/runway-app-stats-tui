@@ -11,7 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	tslc "github.com/NimbleMarkets/ntcharts/v2/linechart/timeserieslinechart"
 
-	"runway-app-stats/internal/stats"
+	"github.com/henrrrik/runway-app-stats-tui/internal/stats"
 )
 
 // headroom keeps the line from touching the top of the chart.
