@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math"
 	"runway-app-stats/internal/sparkline"
 	"runway-app-stats/internal/stats"
 	"strings"
@@ -135,7 +136,9 @@ func (m Model) View() string {
 
 	appNameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("5"))
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
-	panelWidth := m.width/2 - 2
+	// Width() includes padding but not the border, so each panel renders
+	// panelWidth+2 columns; two panels plus a 1-column gap must fit.
+	panelWidth := (m.width-1)/2 - 2
 	sparkWidth := panelWidth - 4
 	panelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -236,9 +239,9 @@ func formatCPU(m stats.Metric) string {
 		return noData
 	}
 	if m.Max <= 0 {
-		return fmt.Sprintf("%.3g %s", v, m.Unit)
+		return fmt.Sprintf("%s %s", formatNumber(v), m.Unit)
 	}
-	return fmt.Sprintf("%.2f%% of %g %s", v/m.Max*100, m.Max, m.Unit)
+	return fmt.Sprintf("%s%% of %g %s", formatNumber(v/m.Max*100), m.Max, m.Unit)
 }
 
 // formatUsage shows the latest value against the plan limit, e.g. "13.5 / 128 MiB".
@@ -247,7 +250,16 @@ func formatUsage(m stats.Metric) string {
 	if !ok {
 		return noData
 	}
-	return fmt.Sprintf("%.1f / %g %s", v, m.Max, m.Unit)
+	return fmt.Sprintf("%s / %g %s", formatNumber(v), m.Max, m.Unit)
+}
+
+// formatNumber uses one decimal place, but keeps three significant figures
+// for values below 1 so small non-zero values don't round to 0.0.
+func formatNumber(v float64) string {
+	if v != 0 && math.Abs(v) < 1 {
+		return fmt.Sprintf("%.3g", v)
+	}
+	return fmt.Sprintf("%.1f", v)
 }
 
 // formatRate shows the latest value with its unit, e.g. "0.0045 MBit/s".

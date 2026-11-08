@@ -190,7 +190,7 @@ func TestView_ShowsValuesWithUnits(t *testing.T) {
 	m.height = 24
 
 	view := m.View()
-	for _, want := range []string{"4.00% of 0.5 cores", "13.5 / 128 MiB", "19.2 / 2048 MiB", "0.0045 MBit/s", "0.0024 MBit/s"} {
+	for _, want := range []string{"4.0% of 0.5 cores", "13.5 / 128 MiB", "19.2 / 2048 MiB", "0.0045 MBit/s", "0.0024 MBit/s"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("view should contain %q\n%s", want, view)
 		}
@@ -264,5 +264,41 @@ func TestLevelColor(t *testing.T) {
 	}
 	if got := levelColor(stats.LevelCritical, normal); got != criticalColor {
 		t.Errorf("critical: got %v, want %v", got, criticalColor)
+	}
+}
+
+func TestView_FitsTerminalWidth(t *testing.T) {
+	for _, width := range []int{80, 81, 120, 121} {
+		m := newSingleApp("myapp", stubFetcher{}, 60*time.Second)
+		m.apps[0].stats = sampleData()
+		m.apps[0].loaded = true
+		m.width = width
+		m.height = 30
+
+		for i, line := range strings.Split(m.View(), "\n") {
+			if w := lipgloss.Width(line); w > width {
+				t.Errorf("width %d: line %d is %d columns wide", width, i, w)
+			}
+		}
+	}
+}
+
+func TestFormat_SmallValuesKeepPrecision(t *testing.T) {
+	cases := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{"usage below 1", formatUsage(metric("MiB", 2048, 0, 0, 0.0234375)), "0.0234 / 2048 MiB"},
+		{"usage above 1", formatUsage(metric("MiB", 128, 0, 0, 13.5)), "13.5 / 128 MiB"},
+		{"usage large", formatUsage(metric("MiB", 5120, 0, 0, 1500.75)), "1500.8 / 5120 MiB"},
+		{"usage zero", formatUsage(metric("MiB", 128, 0, 0, 0)), "0.0 / 128 MiB"},
+		{"cpu small", formatCPU(metric("cores", 0.5, 0, 0, 0.000386)), "0.0772% of 0.5 cores"},
+		{"cpu normal", formatCPU(metric("cores", 0.5, 0, 0, 0.0172)), "3.4% of 0.5 cores"},
+	}
+	for _, c := range cases {
+		if c.got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, c.got, c.want)
+		}
 	}
 }
