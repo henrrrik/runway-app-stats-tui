@@ -51,14 +51,6 @@ If the dashboard is taller than the terminal, scroll with `↑`/`↓` or `j`/`k`
 
 Press `q` or `Ctrl+C` to quit.
 
-## Updating the screenshot
+## License
 
-Needs [freeze](https://github.com/charmbracelet/freeze), `rsvg-convert` (`librsvg2-bin`) and a monospace font with braille, such as Cascadia Mono (`fonts-cascadia-code`).
-
-```bash
-go build -o runway-stats .
-tmux new-session -d -s shot -x 110 -y 34 "./runway-stats my-app"
-sleep 5 && tmux capture-pane -e -p -t shot > shot.ansi && tmux kill-session -t shot
-freeze --language ansi --window --padding 20 --border.radius 8 --font.size 14 \
-  --line-height 1.0 --font.family "Cascadia Mono" -o docs/screenshot.png shot.ansi
-```
+[MIT](LICENSE)
