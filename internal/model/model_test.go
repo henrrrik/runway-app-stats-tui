@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 type stubFetcher struct {
@@ -81,7 +81,7 @@ func TestUpdate_ErrMsg(t *testing.T) {
 
 func TestUpdate_QuitOnQ(t *testing.T) {
 	m := newSingleApp("myapp", stubFetcher{}, 60*time.Second)
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	if cmd == nil {
 		t.Fatal("expected quit command")
 	}
@@ -89,7 +89,7 @@ func TestUpdate_QuitOnQ(t *testing.T) {
 
 func TestUpdate_QuitOnCtrlC(t *testing.T) {
 	m := newSingleApp("myapp", stubFetcher{}, 60*time.Second)
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if cmd == nil {
 		t.Fatal("expected quit command")
 	}
@@ -119,7 +119,7 @@ func TestView_ContainsMetricLabels(t *testing.T) {
 	m.width = 80
 	m.height = 24
 
-	view := m.View()
+	view := m.View().Content
 
 	for _, label := range []string{"CPU", "RAM", "Network", "Disk"} {
 		if !strings.Contains(view, label) {
@@ -134,7 +134,7 @@ func TestView_ContainsAppName(t *testing.T) {
 	m.width = 80
 	m.height = 24
 
-	view := m.View()
+	view := m.View().Content
 	if !strings.Contains(view, "my-cool-app") {
 		t.Error("view should contain the app name")
 	}
@@ -147,7 +147,7 @@ func TestView_MultipleApps(t *testing.T) {
 	m.width = 80
 	m.height = 48
 
-	view := m.View()
+	view := m.View().Content
 	if !strings.Contains(view, "app1") {
 		t.Error("view should contain 'app1'")
 	}
@@ -163,7 +163,7 @@ func TestView_ContainsDividerBetweenApps(t *testing.T) {
 	m.width = 80
 	m.height = 48
 
-	view := m.View()
+	view := m.View().Content
 	// Divider should be a run of at least 20 ─ characters (wider than any border segment)
 	if !strings.Contains(view, strings.Repeat("─", 20)) {
 		t.Error("view should contain a divider between apps")
@@ -176,7 +176,7 @@ func TestView_ShowsError(t *testing.T) {
 	m.width = 80
 	m.height = 24
 
-	view := m.View()
+	view := m.View().Content
 	if !strings.Contains(view, "connection failed") {
 		t.Error("view should show the error message")
 	}
@@ -189,7 +189,7 @@ func TestView_ShowsValuesWithUnits(t *testing.T) {
 	m.width = 120
 	m.height = 24
 
-	view := m.View()
+	view := m.View().Content
 	for _, want := range []string{"4.0% of 0.5 cores", "13.5 / 128 MiB", "19.2 / 2048 MiB", "0.0045 MBit/s", "0.0024 MBit/s"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("view should contain %q\n%s", want, view)
@@ -205,7 +205,7 @@ func TestView_KeepsDashboardOnErrorAfterLoad(t *testing.T) {
 	m.width = 120
 	m.height = 24
 
-	view := m.View()
+	view := m.View().Content
 	if !strings.Contains(view, "Warning: timeout") {
 		t.Error("view should show the error as a warning")
 	}
@@ -275,7 +275,7 @@ func TestView_FitsTerminalWidth(t *testing.T) {
 		m.width = width
 		m.height = 30
 
-		for i, line := range strings.Split(m.View(), "\n") {
+		for i, line := range strings.Split(m.View().Content, "\n") {
 			if w := lipgloss.Width(line); w > width {
 				t.Errorf("width %d: line %d is %d columns wide", width, i, w)
 			}
@@ -300,5 +300,17 @@ func TestFormat_SmallValuesKeepPrecision(t *testing.T) {
 		if c.got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, c.got, c.want)
 		}
+	}
+}
+
+func TestView_UsesAltScreen(t *testing.T) {
+	m := newSingleApp("myapp", stubFetcher{}, 60*time.Second)
+	if !m.View().AltScreen {
+		t.Error("loading view should use the alt screen")
+	}
+	m.width = 80
+	m.height = 24
+	if !m.View().AltScreen {
+		t.Error("dashboard view should use the alt screen")
 	}
 }

@@ -2,7 +2,7 @@
 
 A terminal dashboard for monitoring [Runway](https://www.runway.horse) app resources. Displays CPU, RAM, Network I/O, and Disk usage with sparkline charts.
 
-Built with [Bubbletea](https://github.com/charmbracelet/bubbletea) and [Lipgloss](https://github.com/charmbracelet/lipgloss).
+Built with [Bubble Tea v2](https://github.com/charmbracelet/bubbletea) and [Lip Gloss v2](https://github.com/charmbracelet/lipgloss).
 
 <img width="782" height="452" alt="runway-stats" src="https://github.com/user-attachments/assets/fbf49e42-c983-4b8e-aabd-1ac18d5b3f6f" />
 
