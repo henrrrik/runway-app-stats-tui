@@ -140,3 +140,18 @@ func TestRender_ValuesAboveLimitStillFit(t *testing.T) {
 		t.Errorf("expected the axis to grow past the limit to fit 200 (250):\n%s", out)
 	}
 }
+
+func TestRender_AxesAreFaintNotGrey(t *testing.T) {
+	pts := []stats.Point{{Timestamp: 0, Value: 1}, {Timestamp: 60_000, Value: 2}}
+	for name, out := range map[string]string{
+		"chart":       Render(40, 8, 4, Series{Points: pts, Color: lipgloss.Color("4")}),
+		"placeholder": Render(40, 8, 4),
+	} {
+		if strings.Contains(out, "\x1b[90m") {
+			t.Errorf("%s: should not use bright black, which some themes hide", name)
+		}
+		if !strings.Contains(out, "\x1b[2m") {
+			t.Errorf("%s: dim text should be faint:\n%q", name, out)
+		}
+	}
+}

@@ -17,7 +17,9 @@ import (
 // headroom keeps the line from touching the top of the chart.
 const headroom = 1.2
 
-var axisColor = lipgloss.Color("8")
+// dim is used for axes and labels. Faint dims the theme's own foreground,
+// which stays readable where "bright black" (color 8) can vanish.
+var dim = lipgloss.NewStyle().Faint(true)
 
 // Series is one line on a chart.
 type Series struct {
@@ -42,10 +44,9 @@ func Render(width, height int, limit float64, series ...Series) string {
 		last = first + 1
 	}
 
-	axis := lipgloss.NewStyle().Foreground(axisColor)
 	c := tslc.New(width, height,
 		tslc.WithXYSteps(2, 2),
-		tslc.WithAxesStyles(axis, axis),
+		tslc.WithAxesStyles(dim, dim),
 		tslc.WithXLabelFormatter(func(_ int, v float64) string {
 			return time.Unix(int64(v), 0).Format("15:04")
 		}),
@@ -84,8 +85,7 @@ func placeholder(width, height int) string {
 	return lipgloss.NewStyle().
 		Width(width).Height(height).
 		Align(lipgloss.Center, lipgloss.Center).
-		Foreground(axisColor).
-		Render("no data")
+		Render(dim.Render("no data"))
 }
 
 // formatValue keeps axis labels short: two significant figures for small
