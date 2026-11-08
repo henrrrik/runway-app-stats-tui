@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"runway-app-stats/internal/stats"
 	"strings"
 	"testing"
@@ -312,5 +313,51 @@ func TestView_UsesAltScreen(t *testing.T) {
 	m.height = 24
 	if !m.View().AltScreen {
 		t.Error("dashboard view should use the alt screen")
+	}
+}
+
+func TestView_FitsTerminalHeight(t *testing.T) {
+	for _, tc := range []struct{ apps, height int }{{1, 24}, {1, 40}, {2, 40}, {2, 60}} {
+		configs := make([]AppConfig, tc.apps)
+		for i := range configs {
+			configs[i] = AppConfig{Name: fmt.Sprintf("app%d", i), Fetcher: stubFetcher{}}
+		}
+		m := New(configs, time.Minute)
+		for i := range m.apps {
+			m.apps[i].stats = sampleData()
+			m.apps[i].loaded = true
+		}
+		m.width = 100
+		m.height = tc.height
+
+		if got := len(strings.Split(m.View().Content, "\n")); got > tc.height {
+			t.Errorf("%d apps at height %d: view is %d lines", tc.apps, tc.height, got)
+		}
+	}
+}
+
+func TestChartHeight_GrowsWithTerminal(t *testing.T) {
+	small := chartHeight(24, 1)
+	large := chartHeight(50, 1)
+	if large <= small {
+		t.Errorf("chartHeight(50) = %d should exceed chartHeight(24) = %d", large, small)
+	}
+	if got := chartHeight(10, 3); got < minChartHeight {
+		t.Errorf("chartHeight should not drop below %d, got %d", minChartHeight, got)
+	}
+	if got := chartHeight(500, 1); got > maxChartHeight {
+		t.Errorf("chartHeight should not exceed %d, got %d", maxChartHeight, got)
+	}
+}
+
+func TestView_DrawsLineCharts(t *testing.T) {
+	m := newSingleApp("myapp", stubFetcher{}, time.Minute)
+	m.apps[0].stats = sampleData()
+	m.apps[0].loaded = true
+	m.width = 100
+	m.height = 30
+
+	if !strings.ContainsAny(m.View().Content, "⠁⠂⠄⡀⠈⠐⠠⢀⣀⠉⠒⠤") {
+		t.Error("view should contain braille line charts")
 	}
 }
