@@ -2,7 +2,7 @@
 - `go test -v -race ./...` — run tests (matches CI)
 - `gofmt -s -w .` — run before committing
 - `go vet ./...` — run before committing
-- `gocyclo -over 10 .` — run before committing
+- `golangci-lint run ./...` — run before committing (config in `.golangci.yml`, includes gocyclo with max complexity 10)
 
 ## Workflow
 

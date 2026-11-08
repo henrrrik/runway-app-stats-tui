@@ -1,0 +1,9 @@
+version: "2"
+
+linters:
+  enable:
+    - gocyclo
+  settings:
+    gocyclo:
+      # Report functions with complexity > 10 (same as `gocyclo -over 10`).
+      min-complexity: 10
