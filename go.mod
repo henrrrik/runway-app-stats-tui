@@ -1,4 +1,4 @@
-module runway-app-stats
+module github.com/henrrrik/runway-app-stats-tui
 
 go 1.26.8
 

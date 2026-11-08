@@ -8,8 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"runway-app-stats/internal/model"
-	"runway-app-stats/internal/stats"
+	"github.com/henrrrik/runway-app-stats-tui/internal/model"
+	"github.com/henrrrik/runway-app-stats-tui/internal/stats"
 )
 
 func main() {

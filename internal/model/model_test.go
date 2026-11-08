@@ -3,7 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
-	"runway-app-stats/internal/stats"
+	"github.com/henrrrik/runway-app-stats-tui/internal/stats"
 	"strings"
 	"testing"
 	"time"

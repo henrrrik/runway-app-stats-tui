@@ -14,7 +14,13 @@ Built with [Bubble Tea v2](https://github.com/charmbracelet/bubbletea), [Lip Glo
 ## Install
 
 ```
-go build -o runway-stats .
+go install github.com/henrrrik/runway-app-stats-tui/cmd/runway-stats@latest
+```
+
+Or build from a clone:
+
+```
+go build -o runway-stats ./cmd/runway-stats
 ```
 
 ## Usage
