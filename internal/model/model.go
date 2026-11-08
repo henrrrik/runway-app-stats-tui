@@ -2,17 +2,18 @@ package model
 
 import (
 	"fmt"
+	"image/color"
 	"math"
 	"runway-app-stats/internal/sparkline"
 	"runway-app-stats/internal/stats"
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
-const (
+var (
 	borderColor   = lipgloss.Color("8")
 	valueColor    = lipgloss.Color("15")
 	warnColor     = lipgloss.Color("3")
@@ -73,7 +74,7 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleKeyMsg(msg)
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -88,7 +89,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
@@ -129,7 +130,13 @@ func (m *Model) findApp(name string) *appState {
 	return nil
 }
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = true
+	return v
+}
+
+func (m Model) render() string {
 	if m.width == 0 {
 		return "Loading..."
 	}
@@ -289,7 +296,7 @@ func maxLevel(levels ...stats.Level) stats.Level {
 	return worst
 }
 
-func levelColor(l stats.Level, normal lipgloss.Color) lipgloss.Color {
+func levelColor(l stats.Level, normal color.Color) color.Color {
 	switch l {
 	case stats.LevelCritical:
 		return criticalColor
