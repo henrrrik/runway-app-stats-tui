@@ -376,3 +376,141 @@ func TestView_ChartsScaleToPlanLimit(t *testing.T) {
 		t.Errorf("network chart should top out at the 5 MBit/s limit:\n%s", view)
 	}
 }
+
+// loadedApps returns a model with n apps showing sample data, sized like a
+// terminal that has sent its first WindowSizeMsg.
+func loadedApps(n, width, height int) Model {
+	configs := make([]AppConfig, n)
+	for i := range configs {
+		configs[i] = AppConfig{Name: fmt.Sprintf("app%d", i), Fetcher: stubFetcher{}}
+	}
+	m := New(configs, time.Minute)
+	for i := range configs {
+		updated, _ := m.Update(statsMsg{app: configs[i].Name, data: sampleData()})
+		m = updated.(Model)
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: height})
+	return updated.(Model)
+}
+
+func press(m Model, k tea.KeyPressMsg) Model {
+	updated, _ := m.Update(k)
+	return updated.(Model)
+}
+
+func TestView_CompactWhenChartsDontFit(t *testing.T) {
+	m := loadedApps(1, 100, 12)
+	view := m.View().Content
+
+	if strings.ContainsAny(view, "⠁⠂⠄⡀⠈⠐⠠⢀⣀⠉⠒⠤") {
+		t.Errorf("expected no charts in a 12-row terminal:\n%s", view)
+	}
+	for _, want := range []string{"app0", "CPU", "13.5 / 128 MiB", "19.2 / 2048 MiB", "0.0045 MBit/s"} {
+		if !strings.Contains(ansi.Strip(view), want) {
+			t.Errorf("compact view should contain %q:\n%s", want, ansi.Strip(view))
+		}
+	}
+}
+
+func TestView_NeverExceedsTerminal(t *testing.T) {
+	for _, tc := range []struct{ apps, width, height int }{
+		{1, 80, 6}, {1, 80, 12}, {3, 80, 30}, {6, 100, 20}, {6, 60, 10},
+	} {
+		m := loadedApps(tc.apps, tc.width, tc.height)
+		lines := strings.Split(m.View().Content, "\n")
+		if len(lines) > tc.height {
+			t.Errorf("%+v: view is %d lines", tc, len(lines))
+		}
+		for i, l := range lines {
+			if w := lipgloss.Width(l); w > tc.width {
+				t.Errorf("%+v: line %d is %d columns wide", tc, i, w)
+			}
+		}
+	}
+}
+
+func TestView_ScrollsToOverflowingApps(t *testing.T) {
+	m := loadedApps(6, 100, 10)
+	if strings.Contains(m.View().Content, "app5") {
+		t.Fatal("app5 should start below the fold")
+	}
+
+	m = press(m, tea.KeyPressMsg{Code: tea.KeyEnd})
+	if !strings.Contains(m.View().Content, "app5") {
+		t.Errorf("End should scroll to app5:\n%s", m.View().Content)
+	}
+
+	m = press(m, tea.KeyPressMsg{Code: tea.KeyHome})
+	if !strings.Contains(m.View().Content, "app0") {
+		t.Errorf("Home should scroll back to app0:\n%s", m.View().Content)
+	}
+
+	for range 20 {
+		m = press(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	if !strings.Contains(m.View().Content, "app5") {
+		t.Errorf("Down should scroll to app5:\n%s", m.View().Content)
+	}
+}
+
+func TestView_FooterShowsScrollHintOnlyWhenOverflowing(t *testing.T) {
+	fits := ansi.Strip(loadedApps(1, 100, 30).View().Content)
+	if strings.Contains(fits, "scroll") {
+		t.Errorf("no scroll hint expected when everything fits:\n%s", fits)
+	}
+
+	overflows := loadedApps(6, 100, 10)
+	if !strings.Contains(ansi.Strip(overflows.View().Content), "scroll") {
+		t.Errorf("expected a scroll hint when content overflows:\n%s", overflows.View().Content)
+	}
+	if overflows.View().MouseMode != tea.MouseModeCellMotion {
+		t.Error("mouse wheel scrolling should be on when content overflows")
+	}
+}
+
+func TestPack(t *testing.T) {
+	items := []string{"aaaa", "bbbb", "cccc"}
+	if got := pack(items, 20, "  "); got != "aaaa  bbbb  cccc" {
+		t.Errorf("wide: got %q", got)
+	}
+	if got := pack(items, 10, "  "); got != "aaaa  bbbb\ncccc" {
+		t.Errorf("narrow: got %q", got)
+	}
+	if got := pack(items, 3, "  "); got != "aaaa\nbbbb\ncccc" {
+		t.Errorf("too narrow: got %q", got)
+	}
+}
+
+func TestView_WarningStaysVisibleWhenChartsFillTheScreen(t *testing.T) {
+	m := loadedApps(1, 120, 24)
+	updated, _ := m.Update(errMsg{app: "app0", err: errors.New("timeout")})
+	view := updated.(Model).View().Content
+	if !strings.Contains(view, "Warning: timeout") {
+		t.Errorf("warning should be visible without scrolling:\n%s", view)
+	}
+	if strings.Contains(ansi.Strip(view), "scroll") {
+		t.Errorf("a warning shouldn't make the dashboard overflow:\n%s", view)
+	}
+}
+
+func TestView_CompactColumnsLineUpAcrossApps(t *testing.T) {
+	m := loadedApps(2, 140, 12)
+	updated, _ := m.Update(statsMsg{app: "app1", data: stats.StatsData{
+		CPU:    metric("cores", 0.5, 0.325, 0.4, 0.25),
+		RAM:    metric("MiB", 1024, 665.6, 819.2, 512.5),
+		Disk:   metric("MiB", 2048, 1331.2, 1638.4, 1.2),
+		NetIn:  metric("MBit/s", 5, 3.25, 4, 1.5),
+		NetOut: metric("MBit/s", 5, 3.25, 4, 0.5),
+	}})
+	view := ansi.Strip(updated.(Model).View().Content)
+
+	var cols []int
+	for _, line := range strings.Split(view, "\n") {
+		if strings.HasPrefix(line, "CPU") {
+			cols = append(cols, strings.Index(line, "RAM"), strings.Index(line, "Disk"))
+		}
+	}
+	if len(cols) != 4 || cols[0] != cols[2] || cols[1] != cols[3] {
+		t.Errorf("RAM and Disk columns should line up, got %v:\n%s", cols, view)
+	}
+}
