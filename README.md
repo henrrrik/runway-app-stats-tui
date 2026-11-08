@@ -1,5 +1,7 @@
 # runway-stats
 
+[![Release](https://img.shields.io/github/v/release/henrrrik/runway-app-stats-tui)](https://github.com/henrrrik/runway-app-stats-tui/releases/latest)
+
 A terminal dashboard for monitoring [Runway](https://www.runway.horse) app resources. Displays CPU, RAM, Network I/O, and Disk usage as line charts scaled to your plan's limits.
 
 Built with [Bubble Tea v2](https://github.com/charmbracelet/bubbletea), [Lip Gloss v2](https://github.com/charmbracelet/lipgloss) and [ntcharts](https://github.com/NimbleMarkets/ntcharts).
