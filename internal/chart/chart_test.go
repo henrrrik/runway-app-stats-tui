@@ -42,7 +42,7 @@ func checkSize(t *testing.T, out string, width, height int) {
 }
 
 func TestRender_DrawsLineWithinSize(t *testing.T) {
-	out := Render(30, 6, Series{Points: points(1, 3, 2, 5, 4)})
+	out := Render(30, 6, 0, Series{Points: points(1, 3, 2, 5, 4)})
 	checkSize(t, out, 30, 6)
 	if !hasBraille(out) {
 		t.Errorf("expected braille line in chart:\n%s", out)
@@ -50,14 +50,14 @@ func TestRender_DrawsLineWithinSize(t *testing.T) {
 }
 
 func TestRender_LabelsTimeAxis(t *testing.T) {
-	out := Render(30, 6, Series{Points: points(1, 3, 2, 5, 4)})
+	out := Render(30, 6, 0, Series{Points: points(1, 3, 2, 5, 4)})
 	if !strings.Contains(ansi.Strip(out), ":") {
 		t.Errorf("expected HH:MM time labels:\n%s", out)
 	}
 }
 
 func TestRender_LabelsValueAxisAbovePeak(t *testing.T) {
-	out := Render(30, 6, Series{Points: points(10, 30, 20)})
+	out := Render(30, 6, 0, Series{Points: points(10, 30, 20)})
 	first := ansi.Strip(strings.Split(out, "\n")[0])
 	if !strings.Contains(first, "40") {
 		t.Errorf("expected top label rounded up above the peak (40):\n%s", out)
@@ -65,7 +65,7 @@ func TestRender_LabelsValueAxisAbovePeak(t *testing.T) {
 }
 
 func TestRender_MultipleSeries(t *testing.T) {
-	out := Render(30, 6,
+	out := Render(30, 6, 0,
 		Series{Points: points(1, 2, 3)},
 		Series{Points: points(3, 2, 1)},
 	)
@@ -76,7 +76,7 @@ func TestRender_MultipleSeries(t *testing.T) {
 }
 
 func TestRender_NoDataKeepsSize(t *testing.T) {
-	out := Render(30, 6, Series{})
+	out := Render(30, 6, 0, Series{})
 	checkSize(t, out, 30, 6)
 	if !strings.Contains(ansi.Strip(out), "no data") {
 		t.Errorf("expected 'no data' placeholder:\n%s", out)
@@ -84,7 +84,7 @@ func TestRender_NoDataKeepsSize(t *testing.T) {
 }
 
 func TestRender_FlatZeroSeries(t *testing.T) {
-	out := Render(30, 6, Series{Points: points(0, 0, 0)})
+	out := Render(30, 6, 0, Series{Points: points(0, 0, 0)})
 	checkSize(t, out, 30, 6)
 }
 
@@ -120,5 +120,23 @@ func TestNiceCeil(t *testing.T) {
 		if got := niceCeil(v); math.Abs(got-want) > 1e-9 {
 			t.Errorf("niceCeil(%g) = %g, want %g", v, got, want)
 		}
+	}
+}
+
+func topLabel(out string) string {
+	return ansi.Strip(strings.Split(out, "\n")[0])
+}
+
+func TestRender_ScalesToLimit(t *testing.T) {
+	out := Render(30, 6, 128, Series{Points: points(10, 30, 20)})
+	if !strings.Contains(topLabel(out), "128") {
+		t.Errorf("expected the value axis to top out at the limit (128):\n%s", out)
+	}
+}
+
+func TestRender_ValuesAboveLimitStillFit(t *testing.T) {
+	out := Render(30, 6, 128, Series{Points: points(10, 200)})
+	if !strings.Contains(topLabel(out), "250") {
+		t.Errorf("expected the axis to grow past the limit to fit 200 (250):\n%s", out)
 	}
 }

@@ -26,13 +26,18 @@ type Series struct {
 }
 
 // Render draws the series as a width×height chart with a value axis on the
-// left and a time axis along the bottom. The Y axis always starts at zero.
-func Render(width, height int, series ...Series) string {
+// left and a time axis along the bottom. The value axis runs from zero to the
+// plan limit, or is fitted to the data when the limit is unset (<= 0) or
+// exceeded.
+func Render(width, height int, limit float64, series ...Series) string {
 	peak, first, last, ok := bounds(series)
 	if !ok {
 		return placeholder(width, height)
 	}
-	top := niceCeil(peak * headroom)
+	top := limit
+	if limit <= 0 || peak > limit {
+		top = niceCeil(peak * headroom)
+	}
 	if last == first {
 		last = first + 1
 	}
