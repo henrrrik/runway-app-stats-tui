@@ -204,16 +204,16 @@ func renderAppDashboard(a appState, panelStyle, titleStyle, valueStyle lipgloss.
 	netOut := lipgloss.NewStyle().Foreground(netOutColor)
 
 	cpu := renderPanel(panelStyle, titleStyle, valueStyle, metricLevel(s.CPU),
-		"CPU", chart.Render(w, h, chart.Series{Points: s.CPU.Data, Color: cpuColor}),
+		"CPU", chart.Render(w, h, s.CPU.Max, chart.Series{Points: s.CPU.Data, Color: cpuColor}),
 		formatCPU(s.CPU))
 
 	ram := renderPanel(panelStyle, titleStyle, valueStyle, metricLevel(s.RAM),
-		"RAM", chart.Render(w, h, chart.Series{Points: s.RAM.Data, Color: ramColor}),
+		"RAM", chart.Render(w, h, s.RAM.Max, chart.Series{Points: s.RAM.Data, Color: ramColor}),
 		formatUsage(s.RAM))
 
 	net := renderPanel(panelStyle, titleStyle, valueStyle, maxLevel(metricLevel(s.NetIn), metricLevel(s.NetOut)),
 		"Network",
-		chart.Render(w, h,
+		chart.Render(w, h, max(s.NetIn.Max, s.NetOut.Max),
 			chart.Series{Points: s.NetIn.Data, Color: netInColor},
 			chart.Series{Points: s.NetOut.Data, Color: netOutColor}),
 		fmt.Sprintf("%s %s  %s %s",
@@ -221,7 +221,7 @@ func renderAppDashboard(a appState, panelStyle, titleStyle, valueStyle lipgloss.
 			netOut.Render("out"), formatRate(s.NetOut)))
 
 	disk := renderPanel(panelStyle, titleStyle, valueStyle, metricLevel(s.Disk),
-		"Disk", chart.Render(w, h, chart.Series{Points: s.Disk.Data, Color: diskColor}),
+		"Disk", chart.Render(w, h, s.Disk.Max, chart.Series{Points: s.Disk.Data, Color: diskColor}),
 		formatUsage(s.Disk))
 
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, cpu, " ", ram)

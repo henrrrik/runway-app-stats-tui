@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type stubFetcher struct {
@@ -359,5 +360,19 @@ func TestView_DrawsLineCharts(t *testing.T) {
 
 	if !strings.ContainsAny(m.View().Content, "⠁⠂⠄⡀⠈⠐⠠⢀⣀⠉⠒⠤") {
 		t.Error("view should contain braille line charts")
+	}
+}
+
+func TestView_ChartsScaleToPlanLimit(t *testing.T) {
+	m := newSingleApp("myapp", stubFetcher{}, time.Minute)
+	m.apps[0].stats = sampleData()
+	m.apps[0].loaded = true
+	m.width = 100
+	m.height = 30
+
+	view := ansi.Strip(m.View().Content)
+	// Network's plan limit is 5 MBit/s; only the chart axis shows it bare.
+	if !strings.Contains(view, " 5│") {
+		t.Errorf("network chart should top out at the 5 MBit/s limit:\n%s", view)
 	}
 }
