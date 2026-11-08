@@ -199,13 +199,13 @@ func footer(width int, vp viewport.Model, scrollable bool) string {
 	return footerStyle.Render(ansi.Truncate(text, width, "…"))
 }
 
-// body renders every app: as chart panels when the terminal has room for
-// them, otherwise as compact rows of values.
+// body renders every app: as chart panels when the terminal is tall enough
+// for one app's charts (the rest scroll), otherwise as compact rows of values.
 func (m Model) body() string {
 	if m.width == 0 {
 		return ""
 	}
-	if !chartsFit(m.height, len(m.apps)) {
+	if !chartsFit(m.height) {
 		return m.renderCompact()
 	}
 	return m.renderCharts()
@@ -376,10 +376,11 @@ func chartHeight(termHeight, apps int) int {
 	return min(max(fittingChartHeight(termHeight, apps), minChartHeight), maxChartHeight)
 }
 
-// chartsFit reports whether every app's charts get at least minChartHeight
-// rows; otherwise the dashboard falls back to compact rows.
-func chartsFit(termHeight, apps int) bool {
-	return fittingChartHeight(termHeight, apps) >= minChartHeight
+// chartsFit reports whether the terminal can show a whole app with charts of
+// at least minChartHeight rows. Further apps scroll; only terminals shorter
+// than that fall back to compact rows.
+func chartsFit(termHeight int) bool {
+	return fittingChartHeight(termHeight, 1) >= minChartHeight
 }
 
 func fittingChartHeight(termHeight, apps int) int {

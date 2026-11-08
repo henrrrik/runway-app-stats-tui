@@ -514,3 +514,27 @@ func TestView_CompactColumnsLineUpAcrossApps(t *testing.T) {
 		t.Errorf("RAM and Disk columns should line up, got %v:\n%s", cols, view)
 	}
 }
+
+func TestView_KeepsChartsAndScrollsWhenAppsOverflow(t *testing.T) {
+	m := loadedApps(4, 110, 34)
+	view := m.View().Content
+	if !strings.ContainsAny(view, "⠁⠂⠄⡀⠈⠐⠠⢀⣀⠉⠒⠤") {
+		t.Fatalf("expected charts for 4 apps in a 34-row terminal:\n%s", ansi.Strip(view))
+	}
+	if strings.Contains(view, "app3") {
+		t.Fatal("app3 should start below the fold")
+	}
+	m = press(m, tea.KeyPressMsg{Code: tea.KeyEnd})
+	if !strings.Contains(m.View().Content, "app3") {
+		t.Errorf("End should scroll to app3:\n%s", ansi.Strip(m.View().Content))
+	}
+}
+
+func TestChartsFit_DependsOnlyOnTerminalHeight(t *testing.T) {
+	if !chartsFit(20) {
+		t.Error("a 20-row terminal should fit one app's charts")
+	}
+	if chartsFit(19) {
+		t.Error("a 19-row terminal is too short for charts")
+	}
+}
