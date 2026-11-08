@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
-	"runway-app-stats/internal/sparkline"
+	"runway-app-stats/internal/chart"
 	"runway-app-stats/internal/stats"
 	"strings"
 	"time"
@@ -18,6 +18,11 @@ var (
 	valueColor    = lipgloss.Color("15")
 	warnColor     = lipgloss.Color("3")
 	criticalColor = lipgloss.Color("1")
+	cpuColor      = lipgloss.Color("4")
+	ramColor      = lipgloss.Color("2")
+	diskColor     = lipgloss.Color("6")
+	netInColor    = lipgloss.Color("3")
+	netOutColor   = lipgloss.Color("5")
 )
 
 type statsMsg struct {
@@ -143,10 +148,11 @@ func (m Model) render() string {
 
 	appNameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("5"))
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
-	// Width() includes padding but not the border, so each panel renders
-	// panelWidth+2 columns; two panels plus a 1-column gap must fit.
-	panelWidth := (m.width-1)/2 - 2
-	sparkWidth := panelWidth - 4
+	// In Lip Gloss v2 Width() includes border and padding; two panels plus a
+	// 1-column gap must fit. The chart gets what's left inside both.
+	panelWidth := (m.width - 1) / 2
+	chartWidth := panelWidth - 4
+	chartH := chartHeight(m.height, len(m.apps))
 	panelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
@@ -172,7 +178,7 @@ func (m Model) render() string {
 			continue
 		}
 
-		dashboard := renderAppDashboard(a, panelStyle, titleStyle, valueStyle, panelWidth, sparkWidth)
+		dashboard := renderAppDashboard(a, panelStyle, titleStyle, valueStyle, chartWidth, chartH)
 
 		var status string
 		if a.err != nil {
@@ -192,35 +198,53 @@ func (m Model) render() string {
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
-func renderAppDashboard(a appState, panelStyle, titleStyle, valueStyle lipgloss.Style, panelWidth, sparkWidth int) string {
-	cpuColor := lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
-	ramColor := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	netColor := lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	diskColor := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+func renderAppDashboard(a appState, panelStyle, titleStyle, valueStyle lipgloss.Style, w, h int) string {
 	s := a.stats
+	netIn := lipgloss.NewStyle().Foreground(netInColor)
+	netOut := lipgloss.NewStyle().Foreground(netOutColor)
 
 	cpu := renderPanel(panelStyle, titleStyle, valueStyle, metricLevel(s.CPU),
-		"CPU", cpuColor.Render(sparkline.Render(s.CPU.Values(), sparkWidth)),
+		"CPU", chart.Render(w, h, chart.Series{Points: s.CPU.Data, Color: cpuColor}),
 		formatCPU(s.CPU))
 
 	ram := renderPanel(panelStyle, titleStyle, valueStyle, metricLevel(s.RAM),
-		"RAM", ramColor.Render(sparkline.Render(s.RAM.Values(), sparkWidth)),
+		"RAM", chart.Render(w, h, chart.Series{Points: s.RAM.Data, Color: ramColor}),
 		formatUsage(s.RAM))
 
 	net := renderPanel(panelStyle, titleStyle, valueStyle, maxLevel(metricLevel(s.NetIn), metricLevel(s.NetOut)),
 		"Network",
-		fmt.Sprintf("in  %s\nout %s",
-			netColor.Render(sparkline.Render(s.NetIn.Values(), sparkWidth-4)),
-			netColor.Render(sparkline.Render(s.NetOut.Values(), sparkWidth-4))),
-		fmt.Sprintf("in %s  out %s", formatRate(s.NetIn), formatRate(s.NetOut)))
+		chart.Render(w, h,
+			chart.Series{Points: s.NetIn.Data, Color: netInColor},
+			chart.Series{Points: s.NetOut.Data, Color: netOutColor}),
+		fmt.Sprintf("%s %s  %s %s",
+			netIn.Render("in"), formatRate(s.NetIn),
+			netOut.Render("out"), formatRate(s.NetOut)))
 
 	disk := renderPanel(panelStyle, titleStyle, valueStyle, metricLevel(s.Disk),
-		"Disk", "\n"+diskColor.Render(sparkline.Render(s.Disk.Values(), sparkWidth)),
+		"Disk", chart.Render(w, h, chart.Series{Points: s.Disk.Data, Color: diskColor}),
 		formatUsage(s.Disk))
 
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, cpu, " ", ram)
 	bottomRow := lipgloss.JoinHorizontal(lipgloss.Top, net, " ", disk)
 	return lipgloss.JoinVertical(lipgloss.Left, topRow, bottomRow)
+}
+
+const (
+	minChartHeight = 5
+	maxChartHeight = 16
+	// Rows per app besides its two chart rows: the app header, plus border,
+	// title and value line around each of the two panel rows.
+	appChromeRows = 1 + 2*4
+)
+
+// chartHeight splits the terminal height between the apps, leaving room for
+// panel chrome, the divider between apps and the footer.
+func chartHeight(termHeight, apps int) int {
+	if apps < 1 {
+		apps = 1
+	}
+	perApp := termHeight/apps - 1 // divider or footer
+	return min(max((perApp-appChromeRows)/2, minChartHeight), maxChartHeight)
 }
 
 // renderPanel draws a metric panel. Warning and critical levels recolour the
