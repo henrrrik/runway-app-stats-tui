@@ -15,21 +15,25 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// Colors are the terminal's numbered ANSI colors (or none), so the user's
+// theme decides the actual shades.
 var (
-	borderColor   = lipgloss.Color("8")
-	valueColor    = lipgloss.Color("15")
-	warnColor     = lipgloss.Color("3")
-	criticalColor = lipgloss.Color("1")
-	cpuColor      = lipgloss.Color("4")
-	ramColor      = lipgloss.Color("2")
-	diskColor     = lipgloss.Color("6")
-	netInColor    = lipgloss.Color("3")
-	netOutColor   = lipgloss.Color("5")
+	// Lip Gloss can't make borders faint, so they use bright black.
+	borderColor = lipgloss.Color("8")
+	// Values use the theme's default foreground, readable on light and dark.
+	valueColor    color.Color = lipgloss.NoColor{}
+	warnColor                 = lipgloss.Color("3")
+	criticalColor             = lipgloss.Color("1")
+	cpuColor                  = lipgloss.Color("4")
+	ramColor                  = lipgloss.Color("2")
+	diskColor                 = lipgloss.Color("6")
+	netInColor                = lipgloss.Color("4")
+	netOutColor               = lipgloss.Color("5")
 
 	appNameStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("5"))
 	titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
 	errStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	footerStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	footerStyle  = lipgloss.NewStyle().Faint(true)
 )
 
 type statsMsg struct {

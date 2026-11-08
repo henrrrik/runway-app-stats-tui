@@ -538,3 +538,18 @@ func TestChartsFit_DependsOnlyOnTerminalHeight(t *testing.T) {
 		t.Error("a 19-row terminal is too short for charts")
 	}
 }
+
+func TestColors_InheritTerminalTheme(t *testing.T) {
+	if _, ok := valueColor.(lipgloss.NoColor); !ok {
+		t.Errorf("values should use the terminal's default foreground, got %v", valueColor)
+	}
+	if netInColor == warnColor || netOutColor == warnColor {
+		t.Error("network lines should not share the warning color")
+	}
+	if !footerStyle.GetFaint() {
+		t.Error("footer should be faint")
+	}
+	if _, ok := footerStyle.GetForeground().(lipgloss.NoColor); !ok {
+		t.Error("footer should not set a foreground color")
+	}
+}
