@@ -4,7 +4,7 @@ A terminal dashboard for monitoring [Runway](https://www.runway.horse) app resou
 
 Built with [Bubble Tea v2](https://github.com/charmbracelet/bubbletea), [Lip Gloss v2](https://github.com/charmbracelet/lipgloss) and [ntcharts](https://github.com/NimbleMarkets/ntcharts).
 
-<img width="782" height="452" alt="runway-stats" src="https://github.com/user-attachments/assets/fbf49e42-c983-4b8e-aabd-1ac18d5b3f6f" />
+![runway-stats dashboard showing CPU, RAM, Network and Disk charts](docs/screenshot.svg)
 
 ## Prerequisites
 
@@ -48,3 +48,12 @@ Each chart's value axis runs from zero to the plan limit (0.5 cores, 128 MiB, â€
 A panel turns yellow when its latest value is above the warning threshold Runway reports for your plan, and red above the critical threshold.
 
 Press `q` or `Ctrl+C` to quit.
+
+## Updating the screenshot
+
+```bash
+go build -o runway-stats .
+tmux new-session -d -s shot -x 110 -y 34 "./runway-stats my-app"
+sleep 5 && tmux capture-pane -e -p -t shot > shot.ansi && tmux kill-session -t shot
+python3 scripts/ansi2svg.py shot.ansi docs/screenshot.svg
+```
