@@ -1,18 +1,30 @@
 package stats
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 type Fetcher interface {
 	Fetch() (StatsData, error)
 }
 
+// DefaultTimeout is how long a fetch may take when CLIFetcher.Timeout is zero.
+const DefaultTimeout = 30 * time.Second
+
+// waitDelay bounds how long Fetch waits for output after killing a timed-out
+// runway, in case a child process still holds its stdout open.
+const waitDelay = time.Second
+
 type CLIFetcher struct {
 	AppName  string
 	Interval string
+	// Timeout kills a runway call that takes longer; zero means DefaultTimeout.
+	Timeout time.Duration
 }
 
 func (f CLIFetcher) buildArgs() []string {
@@ -25,9 +37,19 @@ func (f CLIFetcher) buildArgs() []string {
 }
 
 func (f CLIFetcher) Fetch() (StatsData, error) {
-	args := f.buildArgs()
-	cmd := exec.Command("runway", args...)
+	timeout := f.Timeout
+	if timeout <= 0 {
+		timeout = DefaultTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "runway", f.buildArgs()...)
+	cmd.WaitDelay = waitDelay
 	out, err := cmd.Output()
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return StatsData{}, fmt.Errorf("runway timed out after %s", timeout)
+	}
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			stderr := strings.TrimSpace(string(exitErr.Stderr))
