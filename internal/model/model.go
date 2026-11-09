@@ -73,11 +73,18 @@ type Model struct {
 	viewport viewport.Model
 }
 
+// New creates the dashboard. An app named more than once is shown once, since
+// results are routed to apps by name.
 func New(configs []AppConfig, interval time.Duration) Model {
-	apps := make([]appState, len(configs))
-	for i, c := range configs {
+	apps := make([]appState, 0, len(configs))
+	seen := make(map[string]bool, len(configs))
+	for _, c := range configs {
+		if seen[c.Name] {
+			continue
+		}
+		seen[c.Name] = true
 		// Init starts a fetch for every app.
-		apps[i] = appState{name: c.Name, fetcher: c.Fetcher, fetching: true}
+		apps = append(apps, appState{name: c.Name, fetcher: c.Fetcher, fetching: true})
 	}
 	return Model{
 		apps:     apps,

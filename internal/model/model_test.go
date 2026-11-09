@@ -645,3 +645,18 @@ func TestView_NeverPanicsOnNarrowTerminals(t *testing.T) {
 		}()
 	}
 }
+
+func TestNew_IgnoresRepeatedAppNames(t *testing.T) {
+	m := New([]AppConfig{
+		{Name: "a", Fetcher: stubFetcher{}},
+		{Name: "b", Fetcher: stubFetcher{}},
+		{Name: "a", Fetcher: stubFetcher{}},
+	}, time.Minute)
+	var names []string
+	for _, a := range m.apps {
+		names = append(names, a.name)
+	}
+	if got := strings.Join(names, ","); got != "a,b" {
+		t.Errorf("expected apps a,b, got %s", got)
+	}
+}
