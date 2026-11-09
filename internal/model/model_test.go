@@ -660,3 +660,15 @@ func TestNew_IgnoresRepeatedAppNames(t *testing.T) {
 		t.Errorf("expected apps a,b, got %s", got)
 	}
 }
+
+func TestView_WideningResetsHorizontalScroll(t *testing.T) {
+	m := loadedApps(2, 30, 12)
+	for range 10 {
+		m = press(m, tea.KeyPressMsg{Code: tea.KeyRight})
+	}
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 12})
+	m = updated.(Model)
+	if !strings.Contains(m.View().Content, "app0") {
+		t.Errorf("app name should be visible once the terminal is wide enough:\n%s", ansi.Strip(m.View().Content))
+	}
+}
