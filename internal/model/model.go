@@ -59,6 +59,9 @@ type appState struct {
 	stats   stats.StatsData
 	loaded  bool
 	err     error
+	// fetching is set while a fetch is running, so a slow fetch is never
+	// overlapped by the next tick's.
+	fetching bool
 }
 
 type Model struct {
@@ -73,7 +76,8 @@ type Model struct {
 func New(configs []AppConfig, interval time.Duration) Model {
 	apps := make([]appState, len(configs))
 	for i, c := range configs {
-		apps[i] = appState{name: c.Name, fetcher: c.Fetcher}
+		// Init starts a fetch for every app.
+		apps[i] = appState{name: c.Name, fetcher: c.Fetcher, fetching: true}
 	}
 	return Model{
 		apps:     apps,
@@ -150,6 +154,7 @@ func (m Model) handleStatsMsg(msg statsMsg) (Model, tea.Cmd) {
 		a.stats = msg.data
 		a.loaded = true
 		a.err = nil
+		a.fetching = false
 	}
 	return m, nil
 }
@@ -157,15 +162,22 @@ func (m Model) handleStatsMsg(msg statsMsg) (Model, tea.Cmd) {
 func (m Model) handleErrMsg(msg errMsg) (Model, tea.Cmd) {
 	if a := m.findApp(msg.app); a != nil {
 		a.err = msg.err
+		a.fetching = false
 	}
-	return m, tickCmd(m.interval)
+	// The regular tick retries; scheduling one here would multiply timers.
+	return m, nil
 }
 
-// handleTickMsg refreshes every app and schedules the next tick, so the
-// dashboard keeps polling for as long as it runs.
+// handleTickMsg refreshes every app that isn't still fetching and schedules
+// the next tick, so the dashboard keeps polling for as long as it runs.
 func (m Model) handleTickMsg() (Model, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0, len(m.apps)+1)
-	for _, a := range m.apps {
+	for i := range m.apps {
+		a := &m.apps[i]
+		if a.fetching {
+			continue
+		}
+		a.fetching = true
 		cmds = append(cmds, fetchCmd(a.name, a.fetcher))
 	}
 	cmds = append(cmds, tickCmd(m.interval))
