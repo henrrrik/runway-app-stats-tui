@@ -107,11 +107,11 @@ func TestUpdate_WindowSize(t *testing.T) {
 	}
 }
 
-func TestUpdate_ErrMsg_SchedulesRetry(t *testing.T) {
-	m := newSingleApp("myapp", stubFetcher{}, 60*time.Second)
+func TestUpdate_ErrMsg_DoesNotScheduleExtraTicks(t *testing.T) {
+	m := newSingleApp("myapp", stubFetcher{}, time.Millisecond)
 	_, cmd := m.Update(errMsg{app: "myapp", err: errors.New("fetch failed")})
-	if cmd == nil {
-		t.Fatal("expected retry tick command after error")
+	if got := countTicks(runCmd(cmd)); got != 0 {
+		t.Fatalf("an error should be retried by the regular tick, but it scheduled %d extra", got)
 	}
 }
 
@@ -594,5 +594,31 @@ func TestUpdate_KeepsRefreshingOnSchedule(t *testing.T) {
 				m, _ = m.Update(msg)
 			}
 		}
+	}
+}
+
+func countFetchResults(msgs []tea.Msg) int {
+	n := 0
+	for _, msg := range msgs {
+		switch msg.(type) {
+		case statsMsg, errMsg:
+			n++
+		}
+	}
+	return n
+}
+
+func TestUpdate_SkipsAppsWhoseFetchIsStillRunning(t *testing.T) {
+	var m tea.Model = newTwoApps(stubFetcher{data: sampleData()}, stubFetcher{data: sampleData()}, time.Millisecond)
+	// Init has started a fetch for both apps; app1's result arrives, app2's hasn't.
+	m, _ = m.Update(statsMsg{app: "app1", data: sampleData()})
+
+	_, cmd := m.Update(tickMsg{})
+	msgs := runCmd(cmd)
+	if got := countFetchResults(msgs); got != 1 {
+		t.Fatalf("expected only app1 to be fetched again, got %d fetches", got)
+	}
+	if r, ok := msgs[0].(statsMsg); ok && r.app != "app1" {
+		t.Errorf("expected app1 to be fetched, got %s", r.app)
 	}
 }
