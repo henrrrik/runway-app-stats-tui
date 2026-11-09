@@ -553,3 +553,46 @@ func TestColors_InheritTerminalTheme(t *testing.T) {
 		t.Error("footer should not set a foreground color")
 	}
 }
+
+// runCmd executes cmd, expanding batches, and returns the messages produced.
+func runCmd(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var msgs []tea.Msg
+		for _, c := range batch {
+			msgs = append(msgs, runCmd(c)...)
+		}
+		return msgs
+	}
+	return []tea.Msg{msg}
+}
+
+func countTicks(msgs []tea.Msg) int {
+	n := 0
+	for _, msg := range msgs {
+		if _, ok := msg.(tickMsg); ok {
+			n++
+		}
+	}
+	return n
+}
+
+func TestUpdate_KeepsRefreshingOnSchedule(t *testing.T) {
+	var m tea.Model = newSingleApp("myapp", stubFetcher{data: sampleData()}, time.Millisecond)
+	for cycle := range 3 {
+		var cmd tea.Cmd
+		m, cmd = m.Update(tickMsg{})
+		msgs := runCmd(cmd)
+		if got := countTicks(msgs); got != 1 {
+			t.Fatalf("cycle %d: expected the tick to schedule exactly one next tick, got %d", cycle, got)
+		}
+		for _, msg := range msgs {
+			if _, ok := msg.(tickMsg); !ok {
+				m, _ = m.Update(msg)
+			}
+		}
+	}
+}

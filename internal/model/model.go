@@ -161,11 +161,14 @@ func (m Model) handleErrMsg(msg errMsg) (Model, tea.Cmd) {
 	return m, tickCmd(m.interval)
 }
 
+// handleTickMsg refreshes every app and schedules the next tick, so the
+// dashboard keeps polling for as long as it runs.
 func (m Model) handleTickMsg() (Model, tea.Cmd) {
-	cmds := make([]tea.Cmd, len(m.apps))
-	for i, a := range m.apps {
-		cmds[i] = fetchCmd(a.name, a.fetcher)
+	cmds := make([]tea.Cmd, 0, len(m.apps)+1)
+	for _, a := range m.apps {
+		cmds = append(cmds, fetchCmd(a.name, a.fetcher))
 	}
+	cmds = append(cmds, tickCmd(m.interval))
 	return m, tea.Batch(cmds...)
 }
 
