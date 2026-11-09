@@ -72,3 +72,21 @@ func TestCLIFetcher_ReportsRunwayStderr(t *testing.T) {
 		t.Errorf("expected runway's error message, got %v", err)
 	}
 }
+
+const loginErrorJSON = `{
+  "action": "running runway app stats --app my-app --interval=1h -o json",
+  "error": "Unauthorized: Please login first",
+  "status": "error"
+}`
+
+func TestCLIFetcher_ReportsJSONErrorFromStdout(t *testing.T) {
+	for name, exit := range map[string]string{"failing exit": "exit 1", "zero exit": "exit 0"} {
+		t.Run(name, func(t *testing.T) {
+			fakeRunway(t, "cat <<'EOF'\n"+loginErrorJSON+"\nEOF\n"+exit)
+			_, err := CLIFetcher{AppName: "my-app", Interval: "1h"}.Fetch()
+			if err == nil || err.Error() != "runway: Unauthorized: Please login first" {
+				t.Errorf("expected runway's JSON error message, got %v", err)
+			}
+		})
+	}
+}
