@@ -224,22 +224,20 @@ func (m Model) body() string {
 	if m.width == 0 {
 		return ""
 	}
-	if !chartsFit(m.height) {
+	if !chartsFit(m.width, m.height) {
 		return m.renderCompact()
 	}
 	return m.renderCharts()
 }
 
 func (m Model) renderCharts() string {
-	// In Lip Gloss v2 Width() includes border and padding; two panels plus a
-	// 1-column gap must fit. The chart gets what's left inside both.
-	panelWidth := (m.width - 1) / 2
-	chartWidth := panelWidth - 4
+	panelW := panelWidth(m.width)
+	chartW := chartWidth(m.width)
 	chartH := chartHeight(m.height, len(m.apps))
 	panelStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Width(panelWidth).
+		Width(panelW).
 		Padding(0, 1)
 	valueStyle := lipgloss.NewStyle().Foreground(valueColor)
 
@@ -255,7 +253,7 @@ func (m Model) renderCharts() string {
 			continue
 		}
 		sections = append(sections, appHeader(a),
-			renderAppDashboard(a, panelStyle, titleStyle, valueStyle, chartWidth, chartH))
+			renderAppDashboard(a, panelStyle, titleStyle, valueStyle, chartW, chartH))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
@@ -383,6 +381,8 @@ func renderAppDashboard(a appState, panelStyle, titleStyle, valueStyle lipgloss.
 
 const (
 	minChartHeight = 5
+	// minChartWidth leaves room for the value axis plus a readable plot.
+	minChartWidth  = 20
 	maxChartHeight = 16
 	// Rows per app besides its two chart rows: the app header, plus border,
 	// title and value line around each of the two panel rows.
@@ -396,10 +396,22 @@ func chartHeight(termHeight, apps int) int {
 }
 
 // chartsFit reports whether the terminal can show a whole app with charts of
-// at least minChartHeight rows. Further apps scroll; only terminals shorter
-// than that fall back to compact rows.
-func chartsFit(termHeight int) bool {
-	return fittingChartHeight(termHeight, 1) >= minChartHeight
+// at least minChartWidth×minChartHeight. Further apps scroll; only terminals
+// smaller than that fall back to compact rows.
+func chartsFit(termWidth, termHeight int) bool {
+	return chartWidth(termWidth) >= minChartWidth &&
+		fittingChartHeight(termHeight, 1) >= minChartHeight
+}
+
+// panelWidth fits two panels and a 1-column gap side by side. In Lip Gloss v2
+// Width() includes border and padding.
+func panelWidth(termWidth int) int {
+	return (termWidth - 1) / 2
+}
+
+// chartWidth is what's left inside a panel's border and padding.
+func chartWidth(termWidth int) int {
+	return panelWidth(termWidth) - 4
 }
 
 func fittingChartHeight(termHeight, apps int) int {
