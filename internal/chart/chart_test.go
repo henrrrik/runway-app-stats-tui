@@ -155,3 +155,22 @@ func TestRender_AxesAreFaintNotGrey(t *testing.T) {
 		}
 	}
 }
+
+func TestRender_NeverPanicsOnSmallSizes(t *testing.T) {
+	pts := []stats.Point{{Timestamp: 0, Value: 0.003}, {Timestamp: 60_000, Value: 4000}}
+	for h := -1; h <= 20; h++ {
+		for w := -2; w <= 30; w++ {
+			for _, limit := range []float64{0, 0.005, 4, 5120} {
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							t.Errorf("Render(%d, %d, %v) panicked: %v", w, h, limit, r)
+						}
+					}()
+					Render(w, h, limit, Series{Points: pts, Color: lipgloss.Color("4")})
+					Render(w, h, limit)
+				}()
+			}
+		}
+	}
+}

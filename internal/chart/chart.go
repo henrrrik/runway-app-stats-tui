@@ -17,6 +17,13 @@ import (
 // headroom keeps the line from touching the top of the chart.
 const headroom = 1.2
 
+// MinWidth and MinHeight are the smallest chart Render draws; ntcharts panics
+// on some sizes below them, so smaller requests get an empty block.
+const (
+	MinWidth  = 12
+	MinHeight = 3
+)
+
 // dim is used for axes and labels. Faint dims the theme's own foreground,
 // which stays readable where "bright black" (color 8) can vanish.
 var dim = lipgloss.NewStyle().Faint(true)
@@ -32,6 +39,9 @@ type Series struct {
 // plan limit, or is fitted to the data when the limit is unset (<= 0) or
 // exceeded.
 func Render(width, height int, limit float64, series ...Series) string {
+	if width < MinWidth || height < MinHeight {
+		return blank(width, height)
+	}
 	peak, first, last, ok := bounds(series)
 	if !ok {
 		return placeholder(width, height)
@@ -79,6 +89,13 @@ func bounds(series []Series) (peak float64, first, last int64, ok bool) {
 		}
 	}
 	return peak, first, last, ok
+}
+
+func blank(width, height int) string {
+	if width < 1 || height < 1 {
+		return ""
+	}
+	return lipgloss.NewStyle().Width(width).Height(height).Render("")
 }
 
 func placeholder(width, height int) string {

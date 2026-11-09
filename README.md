@@ -51,7 +51,7 @@ runway-stats --interval=6h --refresh=30s my-app
 | `--interval` | `1h` | Stats time range (e.g. `1h`, `6h`, `24h`) |
 | `--refresh` | `60s` | How often to re-fetch data |
 
-Each chart's value axis runs from zero to the plan limit (0.5 cores, 128 MiB, …), so the line shows how close you are to it; if there is no limit or usage exceeds it, the axis fits the data instead. Network shows incoming and outgoing traffic as two lines. Charts grow with the terminal height and shrink as you add apps, down to a minimum height; apps that don't fit are scrolled to. Only when the terminal is too short for even one app's charts (under 20 rows) is each app shown as a compact row of values instead.
+Each chart's value axis runs from zero to the plan limit (0.5 cores, 128 MiB, …), so the line shows how close you are to it; if there is no limit or usage exceeds it, the axis fits the data instead. Network shows incoming and outgoing traffic as two lines. Charts grow with the terminal height and shrink as you add apps, down to a minimum height; apps that don't fit are scrolled to. Only when the terminal is too small for even one app's charts (under 20 rows or 49 columns) is each app shown as a compact row of values instead.
 
 A panel turns yellow when its latest value is above the warning threshold Runway reports for your plan, and red above the critical threshold.
 

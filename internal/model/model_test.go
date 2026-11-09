@@ -530,12 +530,15 @@ func TestView_KeepsChartsAndScrollsWhenAppsOverflow(t *testing.T) {
 	}
 }
 
-func TestChartsFit_DependsOnlyOnTerminalHeight(t *testing.T) {
-	if !chartsFit(20) {
-		t.Error("a 20-row terminal should fit one app's charts")
+func TestChartsFit_NeedsRoomForOneApp(t *testing.T) {
+	if !chartsFit(49, 20) {
+		t.Error("a 49×20 terminal should fit one app's charts")
 	}
-	if chartsFit(19) {
+	if chartsFit(49, 19) {
 		t.Error("a 19-row terminal is too short for charts")
+	}
+	if chartsFit(48, 20) {
+		t.Error("a 48-column terminal is too narrow for charts")
 	}
 }
 
@@ -620,5 +623,25 @@ func TestUpdate_SkipsAppsWhoseFetchIsStillRunning(t *testing.T) {
 	}
 	if r, ok := msgs[0].(statsMsg); ok && r.app != "app1" {
 		t.Errorf("expected app1 to be fetched, got %s", r.app)
+	}
+}
+
+func TestView_CompactWhenTooNarrowForCharts(t *testing.T) {
+	view := loadedApps(1, 40, 40).View().Content
+	if strings.ContainsAny(view, "⠁⠂⠄⡀⠈⠐⠠⢀⣀⠉⠒⠤") {
+		t.Errorf("expected compact rows in a 40-column terminal:\n%s", ansi.Strip(view))
+	}
+}
+
+func TestView_NeverPanicsOnNarrowTerminals(t *testing.T) {
+	for w := 1; w <= 60; w++ {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("width %d panicked: %v", w, r)
+				}
+			}()
+			loadedApps(1, w, 30).View()
+		}()
 	}
 }
