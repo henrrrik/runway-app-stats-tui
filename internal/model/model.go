@@ -116,6 +116,9 @@ func (m Model) syncedViewport() viewport.Model {
 	vp.SetWidth(m.width)
 	vp.SetHeight(max(m.height-footerRows, 0))
 	vp.SetContent(m.body())
+	// SetContent clamps the vertical offset but not the horizontal one, so
+	// clamp it here; otherwise widening the terminal keeps the left edge cut off.
+	vp.SetXOffset(vp.XOffset())
 	return vp
 }
 
